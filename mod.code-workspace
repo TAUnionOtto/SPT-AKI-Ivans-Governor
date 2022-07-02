@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "..\\..\\user\\profiles"
+		},
+		{
+			"path": "..\\..\\user\\mods\\101p-EXPTrader"
 		}
 	],
 	"extensions": {

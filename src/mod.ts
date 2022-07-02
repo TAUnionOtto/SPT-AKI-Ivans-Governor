@@ -318,6 +318,8 @@ class Mod implements IMod {
   private modifyRagFairConfig(globalConfigs: GlobalConfig): void {
     // 将使用跳蚤市场的最低等级调整为 1
     globalConfigs.RagFair.minUserLevel = 1;
+    // 关闭跳蚤市场出售订单
+    globalConfigs.RagFair.maxActiveOfferCount = [{ from: -10000, to: 10000, count: 0 }];
     // 提高市场税率
     globalConfigs.RagFair.communityTax = 8;
     globalConfigs.RagFair.communityItemTax = 12;
@@ -392,7 +394,9 @@ class Mod implements IMod {
    */
   private modifyImbaDrumMagazines(itemTemplates: Record<string, ITemplateItem>, priceTemplates: Record<string, number>): void {
     const imbaDrumMagazineIds = [
-      '5cbdc23eae9215001136a407',
+      '5cbdc23eae9215001136a407', // Molot 75发AK兼容弹鼓 7.62x39
+      '5bed625c0db834001c062946', // 95发RPK-16 5.45x39兼容弹匣
+      '61695095d92c473c7702147a', // SKS 7.62x39 KSI 75发弹鼓
     ];
     const modification = {
       Weight: 0.165,
@@ -452,7 +456,7 @@ class Mod implements IMod {
   }
 
   /**
-   * 魔改特殊装备，降低这些装备在 AI 身上出现的概率，同时提高其价格
+   * 魔改特殊装备，降低这些装备在 AI 身上出现的概率到 0，同时提高其价格
    *
    * TODO: 尝试将这些物品编制成新的起始模板
    * 
@@ -465,6 +469,7 @@ class Mod implements IMod {
     priceTemplates: Record<string, number>,
     botTypeTemplates: Record<string, IBotType>,
   ): void {
+    this.logInfo('start modifyImbaEquipments');
     const priceIncreaseRatio = 3.5;
     imbaEquipments.forEach(equipment => {
       const itemTemplate = itemTemplates[equipment.id];
@@ -486,40 +491,38 @@ class Mod implements IMod {
   }
 
   /**
-   * 降低装备在所有 AI 身上出现的概率
+   * 降低装备在所有 AI 身上出现的概率到 0
    * 
    * @param itemId 
    * @param botTypeTemplates 
    */
   private decreaseEquipProbabilityInAllBotInventory(itemId: string, botTypeTemplates: Record<string, IBotType>): void {
+    // this.logInfo(`start decreaseEquipProbabilityInAllBotInventory @ ${itemId}`);
     for (const botTypeName in botTypeTemplates) {
       if (!Object.prototype.hasOwnProperty.call(botTypeTemplates, botTypeName)) {
         continue;
       }
       const botTypeTemplate = botTypeTemplates[botTypeName];
       const botEquipmentInventory = botTypeTemplate.inventory.equipment;
-      this.decreaseEquipProbabilityInBotEquipment(itemId, botEquipmentInventory);
+      this.decreaseEquipProbabilityInBotEquipment(itemId, botEquipmentInventory, botTypeName);
     }
   }
 
   /**
-   * 降低装备在某个 AI 身上出现的概率
+   * 降低装备在某个 AI 身上出现的概率到 0
    * 
    * @param itemId 
    * @param botEquipmentInventory 
    */
-  private decreaseEquipProbabilityInBotEquipment(itemId: string, botEquipmentInventory: IBotEquipment) {
+  private decreaseEquipProbabilityInBotEquipment(itemId: string, botEquipmentInventory: IBotEquipment, botTypeName: string) {
     for (const equipmentType in botEquipmentInventory) {
       if (!Object.prototype.hasOwnProperty.call(botEquipmentInventory, equipmentType)) {
         continue;          
       }
       const botEquipmentInventoryDetail = botEquipmentInventory[equipmentType];
-      const itemProbability = botEquipmentInventoryDetail[itemId];
-      // 将出现概率降低为 10%，权重值不足 10 的直接不出现
-      if (itemProbability < 10) {
-        botEquipmentInventoryDetail[itemId] = undefined;
-      } else {
-        botEquipmentInventoryDetail[itemId] = Math.floor(botEquipmentInventoryDetail[itemId] / 10);
+      if (!!botEquipmentInventoryDetail[itemId]) {
+        botEquipmentInventoryDetail[itemId] = 0;
+        this.logInfo(`${itemId} @ ${botTypeName} changed to ${botEquipmentInventoryDetail[itemId]}`);
       }
     }
   }
@@ -706,11 +709,7 @@ class Mod implements IMod {
       const quest = quests[questId];
       const traderStandingRewards = quest.rewards.Success.filter(reward => reward.type === 'TraderStanding');
       traderStandingRewards.forEach(reward => {
-        // if (reward.value === '0.01') {
-        //   return;
-        // }
         reward.value = '' + parseFloat(reward.value) / 2;
-        // reward.value = '' + Math.floor(value / 2) / 100;
       });
     }
   }
