@@ -13,6 +13,8 @@ import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
 import type { ConfigServer } from "@spt-aki/servers/ConfigServer";
 
 import * as Enums from './enums';
+import { IQuest } from "@spt-aki/models/eft/common/tables/IQuest";
+import { IHideoutArea } from "@spt-aki/models/eft/hideout/IHideoutArea";
 
 const packageConfig = require('../package.json');
 const imbaEquipments = [{
@@ -264,6 +266,10 @@ class Mod implements IMod {
       this.expandCollections(dataBaseTables.templates.items);
   
       this.increaseBotCount(dataBaseTables.locations);
+      this.decreaseQuestsTraderStandingRewards(dataBaseTables.templates.quests);
+      this.increaseHideoutAreaRequirements(dataBaseTables.hideout.areas);
+
+      this.decreaseAdiKitUseTime(dataBaseTables.templates.items);
     } catch (error) {
       this.logger.error(error.message);
       this.logger.error(error.stack);
@@ -286,9 +292,6 @@ class Mod implements IMod {
             continue;
         }
         const currentItem = itemTemplates[itemId];
-        // if (imbaEquipments.some(imbaEquipment => imbaEquipment.id === itemId)) {
-        //   this.logInfo(`Will set CanSellOnRagfair and CanRequireOnRagfair to be true for ${itemId}`);
-        // }
         currentItem._props.CanSellOnRagfair = true;
         currentItem._props.CanRequireOnRagfair = true;
     }
@@ -315,8 +318,11 @@ class Mod implements IMod {
   private modifyRagFairConfig(globalConfigs: GlobalConfig): void {
     // 将使用跳蚤市场的最低等级调整为 1
     globalConfigs.RagFair.minUserLevel = 1;
-    // 禁用跳蚤市场出售功能，用黑市插件替代出售功能
-    globalConfigs.RagFair.maxActiveOfferCount = [{ from: -10000, to: 10000, count: 0 }];
+    // 提高市场税率
+    globalConfigs.RagFair.communityTax = 8;
+    globalConfigs.RagFair.communityItemTax = 12;
+    globalConfigs.RagFair.communityRequirementTax = 24;
+
   }
 
   private modifyStaminaConfig(globalConfigs: GlobalConfig): void {
@@ -429,7 +435,7 @@ class Mod implements IMod {
   }
 
   /**
-   * 扩展玩家的口袋大小，从 4*1*1 升级为 1*6*5
+   * 扩展玩家的口袋大小，从 4*1*1 升级为 1*7*5
    * @param itemTemplates 
    */
   private expandPockets(itemTemplates: Record<string, ITemplateItem>): void {
@@ -440,7 +446,7 @@ class Mod implements IMod {
       return;
     }
     const pocketFirstGrid = pockets._props.Grids[0];
-    pocketFirstGrid._props.cellsH = 6;
+    pocketFirstGrid._props.cellsH = 7;
     pocketFirstGrid._props.cellsV = 5;
     pockets._props.Grids = [pocketFirstGrid];
   }
@@ -685,6 +691,82 @@ class Mod implements IMod {
     const randomEnd = arrayLength - 0.5;
     const randomNumber = randomStart + Math.random() * randomEnd;
     return Math.floor(randomNumber) + 1;
+  }
+
+  /**
+   * 降低一半任务完成后的商人信任度回报
+   * 
+   * @param quests 
+   */
+  private decreaseQuestsTraderStandingRewards(quests: Record<string, IQuest>): void {
+    for (const questId in quests) {
+      if (!Object.prototype.hasOwnProperty.call(quests, questId)) {
+        continue;        
+      }
+      const quest = quests[questId];
+      const traderStandingRewards = quest.rewards.Success.filter(reward => reward.type === 'TraderStanding');
+      traderStandingRewards.forEach(reward => {
+        // if (reward.value === '0.01') {
+        //   return;
+        // }
+        reward.value = '' + parseFloat(reward.value) / 2;
+        // reward.value = '' + Math.floor(value / 2) / 100;
+      });
+    }
+  }
+
+  /**
+   * 藏身处金钱消耗五倍，物资消耗三倍，技能要求增加四级
+   * 
+   * @param hideoutAreas 
+   */
+  private increaseHideoutAreaRequirements(hideoutAreas: IHideoutArea[]): void {
+    const moneyIds = [
+      Enums.Money.ROUBLES,
+      Enums.Money.DOLLARS,
+      Enums.Money.EUROS,
+    ] as string[];
+    hideoutAreas.forEach(area => {
+      const stages = area.stages;
+      for (const index in stages) {
+        if (!Object.prototype.hasOwnProperty.call(stages, index)) {
+          continue;
+        }
+        const stage = stages[index];
+        stage.requirements.forEach(requirement => {
+          if (requirement.type === 'Item' || requirement.type === 'Tool') {
+            if (moneyIds.includes(requirement.templateId)) {
+              requirement.count = requirement.count * 5;
+            } else {
+              requirement.count = requirement.count * 3;
+            }
+          } else if (requirement.type === 'Skill') {
+            requirement.count = requirement.count + 4;
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * 缩短急救包和医疗用品的使用时间为二分之一，原本使用时间为 1 秒的物品时间不变
+   * 
+   * @param itemTemplates 
+   */
+  private decreaseAdiKitUseTime(itemTemplates: Record<string, ITemplateItem>): void {
+    const medicalNodes = [
+      '5448f39d4bdc2d0a728b4568', // 急救包
+      '5448f3ac4bdc2dce718b4569', // 医疗用品
+    ];
+    for (const itemId in itemTemplates) {
+      if (!Object.prototype.hasOwnProperty.call(itemTemplates, itemId)) {
+        continue;
+      }
+      const itemTemplate = itemTemplates[itemId];
+      if (medicalNodes.includes(itemTemplate._parent) && itemTemplate._props.medUseTime > 1) {
+        itemTemplate._props.medUseTime = itemTemplate._props.medUseTime / 2;
+      }
+    }
   }
 }
 
