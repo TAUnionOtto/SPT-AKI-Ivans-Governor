@@ -2,11 +2,26 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "..\\.."
+		},
+		{
+			"path": "..\\..\\user\\profiles"
 		}
 	],
 	"extensions": {
 		"recommendations": [
-			"dbaeumer.vscode-eslint"
+			"dbaeumer.vscode-eslint",
+			"streetsidesoftware.code-spell-checker",
+		]
+	},
+	"settings": {
+		"cSpell.words": [
+			"GPNVG",
+			"IMBA",
+			"Ragfair",
+			"SCAV"
 		]
 	}
 }

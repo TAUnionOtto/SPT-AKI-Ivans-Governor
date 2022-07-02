@@ -1,5 +1,5 @@
 {
-  "name": "ivans-governor",
+  "name": "IvansGovernor",
   "version": "1.0.0",
   "main": "src/mod.js",
   "license": "MIT",
@@ -7,12 +7,12 @@
   "akiVersion": "3.0.0",
   "scripts": {
     "setup:environment": "yarn install",
-    "build": "rm -rf ./dist && tsc",
-    "build:usermod": "yarn clean:usermod && yarn build && yarn copyTo:usermod",
-    "copyTo:usermod": "cp -r ./dist ../../user/mods/z999-Ivans-Governor/src && cp ./package.json ../../user/mods/z999-Ivans-Governor/package.json",
+    "build:tsmod": "yarn clean:usermod && yarn copyTo:tsmod",
+    "copyTo:tsmod": "cp -r ./src ../../user/mods/z999-Ivans-Governor/src && cp ./package.json ../../user/mods/z999-Ivans-Governor/package.json",
+
     "clean:usermod": "(cd ../../user/mods/ && rm -rf z999-Ivans-Governor && mkdir z999-Ivans-Governor)",
 
-    "build:unzipped": "rm -rf ./dist && copyfiles -e \"./node_modules/**/*.*\" -e \"./dist/**/*.*\" -e \"./yarn.lock\" -e \"./tsconfig.json\" -e \"./README.txt\" -e \"./mod.code-workspace\" \"./**/*.*\" ./dist",
+    "build:unzipped": "copyfiles -e \"./node_modules/**/*.*\" -e \"./dist/**/*.*\" -e \"./package-lock.json\" -e \"./tsconfig.json\" -e \"./README.txt\" -e \"./mod.code-workspace\" \"./**/*.*\" ./dist",
     "zip:files": "cd dist/ && bestzip ../mod.zip *",
     "build:zip": "npm run clean:environment && npm run build:unzipped && npm run zip:files",
     "clean:environment": "node -e \"require('fs').rm('mod.zip', ()=>{})\" && node -e \"require('fs').rmdir('./dist/',{recursive:true},()=>{})\""
