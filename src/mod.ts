@@ -24,6 +24,7 @@ const imbaEquipments = [{
       Weight: 1.7,
       Durability: 1550,
       MaxDurability: 1550,
+      RepairCost: 737,
       BackgroundColor: Enums.EquipmentBackgroundColors.RED,
       speedPenaltyPercent: 8,
       mousePenalty: 12,
@@ -46,6 +47,7 @@ const imbaEquipments = [{
       BackgroundColor: Enums.EquipmentBackgroundColors.RED,
       Width: 2,
       Height: 2,
+      RepairCost: 637,
       Durability: 1250,
       MaxDurability: 1250,
       armorZone: [
@@ -397,6 +399,7 @@ class Mod implements IMod {
       '5cbdc23eae9215001136a407', // Molot 75发AK兼容弹鼓 7.62x39
       '5bed625c0db834001c062946', // 95发RPK-16 5.45x39兼容弹匣
       '61695095d92c473c7702147a', // SKS 7.62x39 KSI 75发弹鼓
+      '5c6592372e221600133e47d7', // MAG5-100 5.56x45 STANAG 100发弹匣
     ];
     const modification = {
       Weight: 0.165,
@@ -469,7 +472,6 @@ class Mod implements IMod {
     priceTemplates: Record<string, number>,
     botTypeTemplates: Record<string, IBotType>,
   ): void {
-    this.logInfo('start modifyImbaEquipments');
     const priceIncreaseRatio = 3.5;
     imbaEquipments.forEach(equipment => {
       const itemTemplate = itemTemplates[equipment.id];
@@ -497,7 +499,6 @@ class Mod implements IMod {
    * @param botTypeTemplates 
    */
   private decreaseEquipProbabilityInAllBotInventory(itemId: string, botTypeTemplates: Record<string, IBotType>): void {
-    // this.logInfo(`start decreaseEquipProbabilityInAllBotInventory @ ${itemId}`);
     for (const botTypeName in botTypeTemplates) {
       if (!Object.prototype.hasOwnProperty.call(botTypeTemplates, botTypeName)) {
         continue;
@@ -522,7 +523,7 @@ class Mod implements IMod {
       const botEquipmentInventoryDetail = botEquipmentInventory[equipmentType];
       if (!!botEquipmentInventoryDetail[itemId]) {
         botEquipmentInventoryDetail[itemId] = 0;
-        this.logInfo(`${itemId} @ ${botTypeName} changed to ${botEquipmentInventoryDetail[itemId]}`);
+        // this.logInfo(`${itemId} @ ${botTypeName} changed to ${botEquipmentInventoryDetail[itemId]}`);
       }
     }
   }
