@@ -858,7 +858,7 @@ class Mod implements IMod {
               requirement.count = requirement.count * 3;
             }
           } else if (requirement.type === 'Skill') {
-            requirement.count = requirement.count + 4;
+            requirement.count = requirement.skillLevel + 4;
           }
         });
       }
