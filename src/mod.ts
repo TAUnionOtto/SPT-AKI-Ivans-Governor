@@ -1,4 +1,4 @@
-import { DependencyContainer } from "tsyringe";
+import type { DependencyContainer } from "tsyringe";
 
 import type { ConfigTypes } from "@spt-aki/models/enums/ConfigTypes";
 import type { IMod } from "@spt-aki/models/external/mod";
@@ -11,13 +11,13 @@ import type { ILocationBase } from "@spt-aki/models/eft/common/ILocationBase";
 import type { Config as GlobalConfig } from "@spt-aki/models/eft/common/IGlobals";
 import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
 import type { ConfigServer } from "@spt-aki/servers/ConfigServer";
+import type { IQuest } from "@spt-aki/models/eft/common/tables/IQuest";
+import type { IHideoutArea } from "@spt-aki/models/eft/hideout/IHideoutArea";
+import type { ITrader } from "@spt-aki/models/eft/common/tables/ITrader";
+import type { IInventoryConfig } from "@spt-aki/models/spt/config/IInventoryConfig";
+import type { IInRaidConfig } from "@spt-aki/models/spt/config/IInRaidConfig";
 
 import * as Enums from './enums';
-import { IQuest } from "@spt-aki/models/eft/common/tables/IQuest";
-import { IHideoutArea } from "@spt-aki/models/eft/hideout/IHideoutArea";
-import { ITrader } from "@spt-aki/models/eft/common/tables/ITrader";
-import { IInventoryConfig } from "@spt-aki/models/spt/config/IInventoryConfig";
-import { IInRaidConfig } from "@spt-aki/models/spt/config/IInRaidConfig";
 
 const packageConfig = require('../package.json');
 const IS_DEBUG_MODE = false;
