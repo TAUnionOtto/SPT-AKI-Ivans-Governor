@@ -263,6 +263,7 @@ class Mod implements IMod {
       this.modifyDBAsTKFSuperMod(globalConfigs);
 
       this.unlockAllItemsInRagfair(dataBaseTables.templates.items);
+      this.randomUpdateRegFairPrices(dataBaseTables.templates.prices);
 
       this.carryUpFourGuns(dataBaseTables.templates.items);
       this.modifyNightVisionGoggles(dataBaseTables.templates.items);
@@ -332,21 +333,22 @@ class Mod implements IMod {
       Enums.ConfigTypes.RAGFAIR as unknown as ConfigTypes
     );
     // 提高跳蚤市场物品售价
-    regFairConfig.dynamic.price.max = 4.5;
+    regFairConfig.dynamic.price.max = 3.35;
     regFairConfig.dynamic.price.min = 2.25;
     // 关闭 BSG 黑名单
     regFairConfig.dynamic.blacklist.enableBsgList = false;
-    // TODO: enabled、liveprices 这两个属性在 d.ts 中本不存在， 需要验证是否成功
-    // copy from 超级模组 tkf-SuperMod/extend/Ragfair/Ragfair.js L24
-    // 开启动态跳蚤市场
-    regFairConfig.dynamic.enabled = true;
-    regFairConfig.traders.ragfair = false;
-    regFairConfig.dynamic.liveprices = true;
-    // 开启在线跳蚤市场
-    // regFairConfig.dynamic.enabled = true;
-    // regFairConfig.traders.ragfair = true;
-    // regFairConfig.dynamic.liveprices = true;
-    // regFairConfig.dynamic.offerItemCount = { min: 1, max: 9 };
+    /**
+     * 超级模组的动态市场和在线市场实际上是启用了 regFairConfig.dynamic 的 enabled、liveprices
+     * @see tkf-SuperMod/extend/Ragfair/Ragfair.js#L24
+     * 
+     * enabled、liveprices 这两个属性在 d.ts 中本不存在，看起来是已被弃用
+     * 试验得出结论：
+     * 
+     * - enabled 选项没有任何作用，应该是已经被默认开启，既默认模式就是动态市场
+     * - liveprices 会生成数量为 99999999 的一笔订单，价格没有找到规律，应该是还在开发中
+     * 
+     * 遂在 randomUpdateRegFairPrices 方法中做动态调整，模拟每日价格波动
+     */
   }
 
   /**
@@ -400,6 +402,53 @@ class Mod implements IMod {
     globalConfigs.Stamina.WalkSpeedOverweightLimits = { x: 432, y: 592, z: 0 };
     globalConfigs.Inertia.InertiaLimits = { x: 0, y: 426, z: 0.5 };
     globalConfigs.Inertia.WalkInertia = { x: 0.01, y: 0.02, z: 0 };
+  }
+
+  /**
+   * 将跳蚤市场的物品价格随机化
+   * 
+   * 下界为 0.45 倍，上届为 3.15 倍，做约以 1 为中轴的正则随机
+   * 
+   * @param priceTemplates 
+   */
+  private randomUpdateRegFairPrices(priceTemplates: Record<string, number>): void {
+    const randomLowerBound = 0.45;
+    const randomUpperBound = 3.15;
+    const ndRandomSkew = 1.95;
+    for (const templateId in priceTemplates) {
+      if (!Object.prototype.hasOwnProperty.call(priceTemplates, templateId)) {
+        continue;        
+      }
+      priceTemplates[templateId] = priceTemplates[templateId] * this.ndRandom(
+        randomLowerBound,
+        randomUpperBound,
+        ndRandomSkew,
+      );
+    }
+  }
+
+  /**
+   * 获得正态分布随机出的一个值
+   * 
+   * @see https://stackoverflow.com/a/49434653
+   * 
+   * @param min 最小值 
+   * @param max 最大值
+   * @param skew 偏斜率
+   * @returns 随机结果
+   */
+  private ndRandom(min: number, max: number, skew: number): number {
+    let u = 0, v = 0;
+    while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+    while(v === 0) v = Math.random();
+    let result = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+
+    result = result / 10.0 + 0.5; // Translate to 0 -> 1
+    if (result > 1 || result < 0) result = this.ndRandom(min, max, skew); // resample between 0 and 1 if out of range
+    result = Math.pow(result, skew); // Skew
+    result *= max - min; // Stretch to fill range
+    result += min; // offset to min
+    return result;
   }
 
   /**
