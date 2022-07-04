@@ -27,6 +27,8 @@ export interface Reputation {
     loss: number;
 }
 export interface Dynamic {
+    liveprices: boolean;
+    enabled: boolean;
     expiredOfferThreshold: number;
     offerItemCount: MinMax;
     price: MinMax;

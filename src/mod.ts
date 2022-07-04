@@ -15,8 +15,13 @@ import type { ConfigServer } from "@spt-aki/servers/ConfigServer";
 import * as Enums from './enums';
 import { IQuest } from "@spt-aki/models/eft/common/tables/IQuest";
 import { IHideoutArea } from "@spt-aki/models/eft/hideout/IHideoutArea";
+import { ITrader } from "@spt-aki/models/eft/common/tables/ITrader";
+import { IInventoryConfig } from "@spt-aki/models/spt/config/IInventoryConfig";
+import { IInRaidConfig } from "@spt-aki/models/spt/config/IInRaidConfig";
 
 const packageConfig = require('../package.json');
+const IS_DEBUG_MODE = false;
+
 const imbaEquipments = [{
     // id: '5fd4c474dd870108a754b241', // 5.11 Hexgrid插板背心
     id: '60a283193cb70855c43a381d', // THOR综合型防弹服
@@ -234,15 +239,14 @@ class Mod implements IMod {
   private configServer: ConfigServer;
 
   public load(container: DependencyContainer): void {
-    this.logger = container.resolve<ILogger>("WinstonLogger");
-    this.databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
-    this.configServer = container.resolve<ConfigServer>("ConfigServer");
-    this.logInfo('Loading...');
     try {
-      const regFairConfig = this.configServer.getConfig<IRagfairConfig>(Enums.ConfigTypes.RAGFAIR as unknown as ConfigTypes);
-      // 关闭 BSG 黑名单
-      regFairConfig.dynamic.blacklist.enableBsgList = false;
-      this.increaseRagFairSellingPrice(regFairConfig);
+      this.logger = container.resolve<ILogger>("WinstonLogger");
+      this.databaseServer = container.resolve<DatabaseServer>("DatabaseServer");
+      this.configServer = container.resolve<ConfigServer>("ConfigServer");
+      this.logInfo('Loading...');
+
+      this.modifyRagfairConfig();
+      this.modifyConfigAsTKFSuperMod();
     } catch (error) {
       this.logger.error(error.message);
       this.logger.error(error.stack);
@@ -253,22 +257,23 @@ class Mod implements IMod {
     try {
       this.logInfo('Delayed Loading...');
       const dataBaseTables = this.databaseServer.getTables();
-      this.unlockAllItemsInRagfair(dataBaseTables.templates.items);
-
       const globalConfigs = dataBaseTables.globals.config;
       this.modifyRagFairConfig(globalConfigs);
       this.modifyStaminaConfig(globalConfigs);
+      this.modifyDBAsTKFSuperMod(globalConfigs);
+
+      this.unlockAllItemsInRagfair(dataBaseTables.templates.items);
 
       this.carryUpFourGuns(dataBaseTables.templates.items);
       this.modifyNightVisionGoggles(dataBaseTables.templates.items);
       this.modifyImbaDrumMagazines(dataBaseTables.templates.items, dataBaseTables.templates.prices);
       this.expandPockets(dataBaseTables.templates.items);
-  
+
       this.modifyImbaEquipments(dataBaseTables.templates.items, dataBaseTables.templates.prices, dataBaseTables.bots.types);
       this.expandCollections(dataBaseTables.templates.items);
-  
+
       this.increaseBotCount(dataBaseTables.locations);
-      this.decreaseQuestsTraderStandingRewards(dataBaseTables.templates.quests);
+      this.increaseTraderLoyaltyStandingRequires(dataBaseTables.traders);
       this.increaseHideoutAreaRequirements(dataBaseTables.hideout.areas);
 
       this.decreaseAdiKitUseTime(dataBaseTables.templates.items);
@@ -283,10 +288,17 @@ class Mod implements IMod {
     this.logger.info(`[${packageConfig.name} - ${packageConfig.version}] ${message}`);
   }
 
+  private debugInfo(message: string) {
+    if (!IS_DEBUG_MODE) {
+      return;
+    }
+    this.logger.debug(`[${packageConfig.name} - ${packageConfig.version}] ${message}`);
+  }
+
   /**
    * 解锁所有商品在跳蚤市场的买卖
-   * 
-   * @param dataBaseTables 
+   *
+   * @param dataBaseTables
    */
   private unlockAllItemsInRagfair(itemTemplates: Record<string, ITemplateItem>): void {
     for (const itemId in itemTemplates) {
@@ -301,32 +313,81 @@ class Mod implements IMod {
 
   /**
    * 禁止将某物品出售给跳蚤市场
-   * 
-   * @param itemTemplate 
+   *
+   * 由 modifyRagFairConfig 代替，直接关闭向跳蚤市场出售的功能
+   *
+   * @param itemTemplate
    */
   private blockToSellToRegFair(itemTemplate: ITemplateItem): void {
-    // itemTemplate._props.CanRequireOnRagfair = false;
+    itemTemplate._props.CanRequireOnRagfair = false;
   }
 
   /**
-   * 提高跳蚤市场物品售价
-   * @param container 
+   * 修改跳蚤市场物价、关闭黑名单、开启动态或者在线跳蚤市场
+   *
+   * @param container
    */
-  private increaseRagFairSellingPrice(regFairConfig: IRagfairConfig): void {
+  private modifyRagfairConfig(): void {
+    const regFairConfig = this.configServer.getConfig<IRagfairConfig>(
+      Enums.ConfigTypes.RAGFAIR as unknown as ConfigTypes
+    );
+    // 提高跳蚤市场物品售价
     regFairConfig.dynamic.price.max = 4.5;
     regFairConfig.dynamic.price.min = 2.25;
+    // 关闭 BSG 黑名单
+    regFairConfig.dynamic.blacklist.enableBsgList = false;
+    // TODO: enabled、liveprices 这两个属性在 d.ts 中本不存在， 需要验证是否成功
+    // copy from 超级模组 tkf-SuperMod/extend/Ragfair/Ragfair.js L24
+    // 开启动态跳蚤市场
+    regFairConfig.dynamic.enabled = true;
+    regFairConfig.traders.ragfair = false;
+    regFairConfig.dynamic.liveprices = true;
+    // 开启在线跳蚤市场
+    // regFairConfig.dynamic.enabled = true;
+    // regFairConfig.traders.ragfair = true;
+    // regFairConfig.dynamic.liveprices = true;
+    // regFairConfig.dynamic.offerItemCount = { min: 1, max: 9 };
   }
 
+  /**
+   * - 购买的物品当作战局中发现的（带勾）
+   * - 关闭战局迷失
+   * - AI 活跃半径：似乎是假设置，没有看到让设置生效的代码
+   */
+  private modifyConfigAsTKFSuperMod(): void {
+    const inventoryConfig = this.configServer.getConfig<IInventoryConfig>(
+      Enums.ConfigTypes.INVENTORY as unknown as ConfigTypes
+    );
+    inventoryConfig.newItemsMarkedFound = true;
+    const inRaidConfig = this.configServer.getConfig<IInRaidConfig>(
+      Enums.ConfigTypes.IN_RAID as unknown as ConfigTypes
+    );
+    inRaidConfig.MIAOnRaidEnd = false;
+  }
+
+  /**
+   * - 去除 PMC 玩家携带物品的限制
+   *
+   * @param globalConfigs
+   */
+  private modifyDBAsTKFSuperMod(globalConfigs: GlobalConfig): void {
+    globalConfigs.RestrictionsInRaid = [];
+  }
+
+  /**
+   * 调整跳蚤市场设置，关闭向市场销售的功能，并将访问市场的最低等级调到 1
+   *
+   * @param globalConfigs
+   */
   private modifyRagFairConfig(globalConfigs: GlobalConfig): void {
     // 将使用跳蚤市场的最低等级调整为 1
     globalConfigs.RagFair.minUserLevel = 1;
     // 关闭跳蚤市场出售订单
     globalConfigs.RagFair.maxActiveOfferCount = [{ from: -10000, to: 10000, count: 0 }];
     // 提高市场税率
-    globalConfigs.RagFair.communityTax = 8;
-    globalConfigs.RagFair.communityItemTax = 12;
-    globalConfigs.RagFair.communityRequirementTax = 24;
-
+    // globalConfigs.RagFair.communityTax = 8;
+    // globalConfigs.RagFair.communityItemTax = 12;
+    // globalConfigs.RagFair.communityRequirementTax = 24;
   }
 
   private modifyStaminaConfig(globalConfigs: GlobalConfig): void {
@@ -343,9 +404,10 @@ class Mod implements IMod {
 
   /**
    * 将主武器栏位的 filter 拼接到手枪和近战武器栏位的 filter 中，实现同时装备四把长枪的效果
-   * @param itemTemplates 
+   *
+   * @param itemTemplates
    */
-  private carryUpFourGuns (itemTemplates: Record<string, ITemplateItem>): void {
+  private carryUpFourGuns(itemTemplates: Record<string, ITemplateItem>): void {
     /** 默认物品栏 ID */
     const defaultInventoryId = '55d7217a4bdc2d86028b456d';
     const defaultInventor = itemTemplates[defaultInventoryId];
@@ -363,8 +425,9 @@ class Mod implements IMod {
   }
 
   /**
-   * 增强夜视仪和红外夜视仪的成像性能
-   * @param itemTemplates 
+   * 增强夜视仪和热成像的成像性能
+   *
+   * @param itemTemplates
    */
   private modifyNightVisionGoggles(itemTemplates: Record<string, ITemplateItem>): void {
     /** GPNVG-18夜视仪 ID */
@@ -375,24 +438,45 @@ class Mod implements IMod {
       return;
     }
     gpnvg18._props.Intensity = 1;
-    gpnvg18._props.MaskSize = 1.35;
+    // gpnvg18._props.MaskSize = 1.35;
+    gpnvg18._props.MaskSize = 3;
     gpnvg18._props.NoiseIntensity = 0;
     gpnvg18._props.NoiseScale = 0;
     gpnvg18._props.Color = { r: 0, g: 200, b: 200, a: 254 };
     gpnvg18._props.DiffuseIntensity = 0;
+    gpnvg18._props.HasHinge = true;
+    gpnvg18._props.Ergonomics = -2;
 
+    /** FLIR RS-32 2.25-9x 35毫米 60Hz热成像步枪瞄准镜 */
     const flir60hzId = '5d1b5e94d7ad1a2b865a96b0';
     const flir60hz = itemTemplates[flir60hzId];
     if (!flir60hz) {
       this.logger.warning(`Can not find RS-32 60Hz thermal rifle scope by id ${flir60hzId}`);
       return;
     }
-    gpnvg18._props.Ergonomics = -2;
+    flir60hz._props.DepthFade = 0;
+    flir60hz._props.DepthFade = 0;
+    flir60hz._props.RoughnessCoef = 0;
+    flir60hz._props.SpecularCoef = 1.1;
+    flir60hz._props.MainTexColorCoef = 0.25;
+    flir60hz._props.MinimumTemperatureValue = 0.35;
+    flir60hz._props.RampShift = 0;
+    flir60hz._props.HeatMin = 0.55;
+    flir60hz._props.ColdMax = 0.462;
+    flir60hz._props.IsNoisy = false;
+    flir60hz._props.NoiseIntensity = 0;
+    flir60hz._props.IsFpsStuck = false;
+    flir60hz._props.IsGlitch = false;
+    flir60hz._props.IsMotionBlurred = false;
+    flir60hz._props.Mask = 'Thermal';
+    flir60hz._props.MaskSize = 3;
+    flir60hz._props.IsPixelated = false;
+    flir60hz._props.PixelationBlockCount = 256;
   }
 
   /**
    * 增强指定的弹夹，减重、增加可靠性、增加枪械性能。同时大幅提升其价格。
-   * @param itemTemplates 
+   * @param itemTemplates
    */
   private modifyImbaDrumMagazines(itemTemplates: Record<string, ITemplateItem>, priceTemplates: Record<string, number>): void {
     const imbaDrumMagazineIds = [
@@ -422,15 +506,14 @@ class Mod implements IMod {
       }
       this.modifyItemTemplateAs(drumMagazine, modification);
       priceTemplates[id] = priceTemplates[id] * priceIncreaseRatio;
-      this.blockToSellToRegFair(drumMagazine);
     });
   }
 
   /**
    * 按指定 modification 更新 itemTemplate 的 props
-   * 
-   * @param itemTemplate 
-   * @param modification 
+   *
+   * @param itemTemplate
+   * @param modification
    */
   private modifyItemTemplateAs(itemTemplate: ITemplateItem, modification: ITemplateItemProps): void {
     for (const key in modification) {
@@ -443,7 +526,7 @@ class Mod implements IMod {
 
   /**
    * 扩展玩家的口袋大小，从 4*1*1 升级为 1*7*5
-   * @param itemTemplates 
+   * @param itemTemplates
    */
   private expandPockets(itemTemplates: Record<string, ITemplateItem>): void {
     const pocketsId = '557ffd194bdc2d28148b457f';
@@ -462,10 +545,10 @@ class Mod implements IMod {
    * 魔改特殊装备，降低这些装备在 AI 身上出现的概率到 0，同时提高其价格
    *
    * TODO: 尝试将这些物品编制成新的起始模板
-   * 
-   * @param itemTemplates 
-   * @param priceTemplates 
-   * @param botTypeTemplates 
+   *
+   * @param itemTemplates
+   * @param priceTemplates
+   * @param botTypeTemplates
    */
   private modifyImbaEquipments(
     itemTemplates: Record<string, ITemplateItem>,
@@ -488,15 +571,14 @@ class Mod implements IMod {
       }
       priceTemplates[equipment.id] = priceTemplates[equipment.id] * priceIncreaseRatio;
       this.decreaseEquipProbabilityInAllBotInventory(equipment.id, botTypeTemplates);
-      this.blockToSellToRegFair(itemTemplate);
     });
   }
 
   /**
    * 降低装备在所有 AI 身上出现的概率到 0
-   * 
-   * @param itemId 
-   * @param botTypeTemplates 
+   *
+   * @param itemId
+   * @param botTypeTemplates
    */
   private decreaseEquipProbabilityInAllBotInventory(itemId: string, botTypeTemplates: Record<string, IBotType>): void {
     for (const botTypeName in botTypeTemplates) {
@@ -511,26 +593,27 @@ class Mod implements IMod {
 
   /**
    * 降低装备在某个 AI 身上出现的概率到 0
-   * 
-   * @param itemId 
-   * @param botEquipmentInventory 
+   *
+   * @param itemId
+   * @param botEquipmentInventory
    */
   private decreaseEquipProbabilityInBotEquipment(itemId: string, botEquipmentInventory: IBotEquipment, botTypeName: string) {
     for (const equipmentType in botEquipmentInventory) {
       if (!Object.prototype.hasOwnProperty.call(botEquipmentInventory, equipmentType)) {
-        continue;          
+        continue;
       }
       const botEquipmentInventoryDetail = botEquipmentInventory[equipmentType];
       if (!!botEquipmentInventoryDetail[itemId]) {
         botEquipmentInventoryDetail[itemId] = 0;
-        // this.logInfo(`${itemId} @ ${botTypeName} changed to ${botEquipmentInventoryDetail[itemId]}`);
+        this.debugInfo(`${itemId} @ ${botTypeName} changed to ${botEquipmentInventoryDetail[itemId]}`);
       }
     }
   }
 
   /**
    * 扩展各类容器
-   * @param itemTemplates 
+   *
+   * @param itemTemplates
    */
   private expandCollections(itemTemplates: Record<string, ITemplateItem>): void {
     collectionsToExpand.forEach(collection => {
@@ -559,11 +642,11 @@ class Mod implements IMod {
 
   /**
    * 清空容器的禁止容纳清单
-   * 
-   * @param itemTemplate 
+   *
+   * @param itemTemplate
    */
   private removeAllExcludedFilter(itemTemplate: ITemplateItem): void {
-    const rootTemplateNodeId = '54009119af1c881c07000029'; 
+    const rootTemplateNodeId = '54009119af1c881c07000029';
     itemTemplate._props.Grids.forEach(grid => {
       grid._props.filters.forEach(filter => {
         filter.ExcludedFilter = [];
@@ -574,10 +657,10 @@ class Mod implements IMod {
 
   /**
    * 增加胸挂的容量
-   * 
+   *
    * 注意：不合理的容量参数会导致显示上的重叠
-   * 
-   * @param chestRig 
+   *
+   * @param chestRig
    */
   private expandChestRigGrids(chestRig: ITemplateItem): void {
     const rightTopGrid = chestRig._props.Grids.find(grid => grid._name === "4");
@@ -588,24 +671,31 @@ class Mod implements IMod {
 
   /**
    * 在所有地图内增加若干波次，并且增加每个波次的 AI 数量
-   * 
-   * @param locations 
+   *
+   * @param locations
    */
   private increaseBotCount(locations: ILocations): void {
+    this.debugInfo('Start to increaseBotCount');
     for (const locationName in locations) {
       if (!Object.prototype.hasOwnProperty.call(locations, locationName)) {
+        this.debugInfo(`Break from increaseBotCount by !Object.prototype.hasOwnProperty @ ${locationName}`);
         continue;
       }
       const locationBase = locations[locationName].base as ILocationBase;
       if (!locationBase) {
-        return;
+        this.debugInfo(`Break from increaseBotCount by !locationBase @ ${locationName}`);
+        continue;
       }
-      if (locationBase.waves.length === 0) {
-        return;
+      /** 部分地图不使用 waves 记录敌人的波次，而是全部使用 boss 信息，比如实验室（laboratory） */
+      const locationHasBotsWithoutWaves = ['laboratory'];
+      if (locationBase.waves.length === 0 && !locationHasBotsWithoutWaves.includes(locationName)) {
+        this.debugInfo(`Break from increaseBotCount by no-waves-and-no-bots @ ${locationName}`);
+        continue;
       }
 
       locationBase.MaxBotPerZone = 100;
-      locationBase.BotMax = locationBase.BotMax * 5;
+      locationBase.BotMax && (locationBase.BotMax = locationBase.BotMax * 50);
+      locationBase.BotMaxPlayer && (locationBase.BotMaxPlayer = locationBase.BotMaxPlayer * 50);
       locationBase.sav_summon_seconds = 20;
 
       // 将每个波次的 AI 数量提高到三倍，最大为 5 ~ 10
@@ -621,13 +711,13 @@ class Mod implements IMod {
 
   /**
    * 随机添加几波 AI，概率、数量、地点、时间、难度均随机
-   * 
-   * @param locationBase 
+   *
+   * @param locationBase
    */
   private addRandomWaves(locationBase: ILocationBase, increaseRatio = 0.7) {
     const validBotPreset = ['easy', 'normal', 'hard'];
     const validWildSpawnType = ['assault', 'marksman'];
-    const timeMaxLimit = locationBase.exit_access_time * 60; 
+    const timeMaxLimit = locationBase.exit_access_time * 60;
     const waveCount = locationBase.waves.length;
     for (let index = 0; index < waveCount; index++) {
       if (Math.random() > increaseRatio) {
@@ -653,12 +743,13 @@ class Mod implements IMod {
 
   /**
    * 将场景 boss 出现的概率提高到 100%，增加 boss 身边的小弟数量
-   * 
+   *
    * pmc bot 出现概率调整到 75%，并且增加约一倍的数量
-   * 
-   * @param locationBase 
+   *
+   * @param locationBase
    */
   private increaseBossGroups(locationBase: ILocationBase) {
+    this.debugInfo(`Start to increaseBossGroups @ ${locationBase.Name}`);
     locationBase.BossLocationSpawn.forEach(bossSpawn => {
       if (bossSpawn.BossName === 'exUsec') {
         return;
@@ -670,10 +761,12 @@ class Mod implements IMod {
       }
       let bossEscortAmounts = bossSpawn.BossEscortAmount.split(',').map(amount => parseInt(amount, 10) || 0);
       if (bossEscortAmounts.length === 0) {
+        this.debugInfo(`Modified boss ${bossSpawn.BossName} escort amount to ${bossSpawn.BossEscortAmount}`);
         return;
       }
       if (bossEscortAmounts.length === 1) {
         bossSpawn.BossEscortAmount = "" + Math.max(4, bossEscortAmounts[0] * 2);
+        this.debugInfo(`Modified boss ${bossSpawn.BossName} escort amount to ${bossSpawn.BossEscortAmount}`);
         return;
       }
       const maxAmount = Math.max(...bossEscortAmounts);
@@ -683,6 +776,7 @@ class Mod implements IMod {
         bossEscortAmounts = bossEscortAmounts.map(amount => Math.floor(amount * 1.75));
       }
       bossSpawn.BossEscortAmount = bossEscortAmounts.join(',');
+      this.debugInfo(`Modified boss ${bossSpawn.BossName} escort amount to ${bossSpawn.BossEscortAmount}`);
     });
   }
 
@@ -699,13 +793,15 @@ class Mod implements IMod {
 
   /**
    * 降低一半任务完成后的商人信任度回报
-   * 
-   * @param quests 
+   *
+   * 以由 increaseTraderLoyaltyStandingRequires 代替
+   *
+   * @param quests
    */
   private decreaseQuestsTraderStandingRewards(quests: Record<string, IQuest>): void {
     for (const questId in quests) {
       if (!Object.prototype.hasOwnProperty.call(quests, questId)) {
-        continue;        
+        continue;
       }
       const quest = quests[questId];
       const traderStandingRewards = quest.rewards.Success.filter(reward => reward.type === 'TraderStanding');
@@ -716,9 +812,30 @@ class Mod implements IMod {
   }
 
   /**
+   * 商人等级需要的人物等级、信任度和交易数额翻倍
+   *
+   * @param traders
+   */
+  private increaseTraderLoyaltyStandingRequires(traders:  Record<string, ITrader>): void {
+    for (const traderId in traders) {
+      if (!Object.prototype.hasOwnProperty.call(traders, traderId)) {
+        continue;
+      }
+      const trader = traders[traderId];
+      trader.base.loyaltyLevels.forEach(levelConfig => {
+        const minLevel = parseInt(levelConfig.minLevel as unknown as string, 10);
+        levelConfig.minLevel = minLevel === 1 ? 1 : minLevel * 2;
+
+        levelConfig.minSalesSum = levelConfig.minSalesSum * 2;
+        levelConfig.minStanding = levelConfig.minStanding * 2;
+      });
+    }
+  }
+
+  /**
    * 藏身处金钱消耗五倍，物资消耗三倍，技能要求增加四级
-   * 
-   * @param hideoutAreas 
+   *
+   * @param hideoutAreas
    */
   private increaseHideoutAreaRequirements(hideoutAreas: IHideoutArea[]): void {
     const moneyIds = [
@@ -750,8 +867,8 @@ class Mod implements IMod {
 
   /**
    * 缩短急救包和医疗用品的使用时间为二分之一，原本使用时间为 1 秒的物品时间不变
-   * 
-   * @param itemTemplates 
+   *
+   * @param itemTemplates
    */
   private decreaseAdiKitUseTime(itemTemplates: Record<string, ITemplateItem>): void {
     const medicalNodes = [
