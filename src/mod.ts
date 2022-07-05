@@ -21,6 +21,7 @@ import { IInRaidConfig } from "@spt-aki/models/spt/config/IInRaidConfig";
 
 const packageConfig = require('../package.json');
 const IS_DEBUG_MODE = false;
+const NEED_RUN_TEST = true;
 
 const imbaEquipments = [{
     // id: '5fd4c474dd870108a754b241', // 5.11 Hexgrid插板背心
@@ -29,7 +30,7 @@ const imbaEquipments = [{
       Weight: 1.7,
       Durability: 1550,
       MaxDurability: 1550,
-      RepairCost: 737,
+      RepairCost: 337,
       BackgroundColor: Enums.EquipmentBackgroundColors.RED,
       speedPenaltyPercent: 8,
       mousePenalty: 12,
@@ -44,6 +45,7 @@ const imbaEquipments = [{
       ],
       ArmorMaterial: 'Aramid',
     } as ITemplateItemProps,
+    priceIncreaseRatio: 9.5,
   }, {
     // id: '5c0e6a1586f77404597b4965', // elt-A + Belt-B胸挂
     id: '592c2d1a86f7746dbe2af32a', // ANA Tactical Alpha胸挂
@@ -52,7 +54,7 @@ const imbaEquipments = [{
       BackgroundColor: Enums.EquipmentBackgroundColors.RED,
       Width: 2,
       Height: 2,
-      RepairCost: 637,
+      RepairCost: 237,
       Durability: 1250,
       MaxDurability: 1250,
       armorZone: [
@@ -71,12 +73,14 @@ const imbaEquipments = [{
       ArmorMaterial: 'Aramid',
     } as ITemplateItemProps,
     needExpandGridAsChestRig: true,
+    riceIncreaseRatio: 9.5,
   }, {
     id: '5e00c1ad86f774747333222c', // Team Wendy EXFIL防弹头盔 Black
     // id: '61bca7cda0eae612383adf57', // NFM \"HJELM\" 头盔
     modification: {
       BackgroundColor: Enums.EquipmentBackgroundColors.RED,
       Weight: 0.35,
+      RepairCost: 137,
       Durability: 650,
       MaxDurability: 650,
       armorClass: 6,
@@ -91,6 +95,7 @@ const imbaEquipments = [{
         'Jaws',
       ],
     } as ITemplateItemProps,
+    riceIncreaseRatio: 5.5,
   }, {
     id: '5e00cfa786f77469dc6e5685', // TW EXFIL护耳 Black
     modification: {
@@ -154,6 +159,7 @@ const imbaEquipments = [{
       Width: 3,
       Height: 2,
     } as ITemplateItemProps,
+    riceIncreaseRatio: 1.5,
   }
 ];
 
@@ -263,21 +269,25 @@ class Mod implements IMod {
       this.modifyDBAsTKFSuperMod(globalConfigs);
 
       this.unlockAllItemsInRagfair(dataBaseTables.templates.items);
-      this.randomUpdateRegFairPrices(dataBaseTables.templates.prices);
 
       this.carryUpFourGuns(dataBaseTables.templates.items);
       this.modifyNightVisionGoggles(dataBaseTables.templates.items);
       this.modifyImbaDrumMagazines(dataBaseTables.templates.items, dataBaseTables.templates.prices);
       this.expandPockets(dataBaseTables.templates.items);
 
+      // TODO: 目前修改价格不能正常作用于跳蚤市场的售价
+      //       需要等 SPT-AKI 升级到 ^3.0.1，并使用 loadAfterDbInit() hook 来修改
       this.modifyImbaEquipments(dataBaseTables.templates.items, dataBaseTables.templates.prices, dataBaseTables.bots.types);
       this.expandCollections(dataBaseTables.templates.items);
+      this.randomUpdateRegFairPrices(dataBaseTables.templates.prices);
 
       this.increaseBotCount(dataBaseTables.locations);
       this.increaseTraderLoyaltyStandingRequires(dataBaseTables.traders);
       this.increaseHideoutAreaRequirements(dataBaseTables.hideout.areas);
 
       this.decreaseAdiKitUseTime(dataBaseTables.templates.items);
+
+      NEED_RUN_TEST && this.testItemsPrice(dataBaseTables.templates.prices);
     } catch (error) {
       this.logger.error(error.message);
       this.logger.error(error.stack);
@@ -419,11 +429,11 @@ class Mod implements IMod {
       if (!Object.prototype.hasOwnProperty.call(priceTemplates, templateId)) {
         continue;        
       }
-      priceTemplates[templateId] = priceTemplates[templateId] * this.ndRandom(
+      priceTemplates[templateId] = Math.floor(priceTemplates[templateId] * this.ndRandom(
         randomLowerBound,
         randomUpperBound,
         ndRandomSkew,
-      );
+      )) || 1;
     }
   }
 
@@ -618,7 +628,7 @@ class Mod implements IMod {
       if (equipment.needRemoveAllExcludedFilter) {
         this.removeAllExcludedFilter(itemTemplate);
       }
-      priceTemplates[equipment.id] = priceTemplates[equipment.id] * priceIncreaseRatio;
+      priceTemplates[equipment.id] = priceTemplates[equipment.id] * (equipment.riceIncreaseRatio || priceIncreaseRatio);
       this.decreaseEquipProbabilityInAllBotInventory(equipment.id, botTypeTemplates);
     });
   }
@@ -933,6 +943,12 @@ class Mod implements IMod {
         itemTemplate._props.medUseTime = itemTemplate._props.medUseTime / 2;
       }
     }
+  }
+
+  private testItemsPrice(priceTemplates: Record<string, number>): void {
+    imbaEquipments.forEach(equipment => {
+      this.logInfo(`[TEST] Equipment price ${equipment.id} -> ${priceTemplates[equipment.id]}`);
+    });
   }
 }
 
