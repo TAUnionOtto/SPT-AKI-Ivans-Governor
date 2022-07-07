@@ -1,23 +1,24 @@
-import { DependencyContainer } from "tsyringe";
-
-import type { ConfigTypes } from "@spt-aki/models/enums/ConfigTypes";
-import type { IMod } from "@spt-aki/models/external/mod";
-import type { ILogger } from "@spt-aki/models/spt/utils/ILogger";
-import type { ILocations } from "@spt-aki/models/spt/server/ILocations";
-import type { IRagfairConfig } from "@spt-aki/models/spt/config/IRagfairConfig";
-import type { IBotType, Equipment as IBotEquipment } from "@spt-aki/models/eft/common/tables/IBotType";
-import type { ITemplateItem, Props as ITemplateItemProps } from "@spt-aki/models/eft/common/tables/ITemplateItem";
-import type { ILocationBase } from "@spt-aki/models/eft/common/ILocationBase";
-import type { Config as GlobalConfig } from "@spt-aki/models/eft/common/IGlobals";
-import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
-import type { ConfigServer } from "@spt-aki/servers/ConfigServer";
+import { DependencyContainer } from 'tsyringe';
 
 import * as Enums from './enums';
-import { IQuest } from "@spt-aki/models/eft/common/tables/IQuest";
-import { IHideoutArea } from "@spt-aki/models/eft/hideout/IHideoutArea";
-import { ITrader } from "@spt-aki/models/eft/common/tables/ITrader";
-import { IInventoryConfig } from "@spt-aki/models/spt/config/IInventoryConfig";
-import { IInRaidConfig } from "@spt-aki/models/spt/config/IInRaidConfig";
+
+import type { ConfigTypes } from '@spt-aki/models/enums/ConfigTypes';
+import type { IMod } from '@spt-aki/models/external/mod';
+import type { ILogger } from '@spt-aki/models/spt/utils/ILogger';
+import type { ILocations } from '@spt-aki/models/spt/server/ILocations';
+import type { IRagfairConfig } from '@spt-aki/models/spt/config/IRagfairConfig';
+import type { IBotType, Equipment as IBotEquipment } from '@spt-aki/models/eft/common/tables/IBotType';
+import type { ITemplateItem, Props as ITemplateItemProps } from '@spt-aki/models/eft/common/tables/ITemplateItem';
+import type { ILocationBase } from '@spt-aki/models/eft/common/ILocationBase';
+import type { Config as GlobalConfig } from '@spt-aki/models/eft/common/IGlobals';
+import type { DatabaseServer } from '@spt-aki/servers/DatabaseServer';
+import type { ConfigServer } from '@spt-aki/servers/ConfigServer';
+import type { IQuest } from '@spt-aki/models/eft/common/tables/IQuest';
+import type { IHideoutArea } from '@spt-aki/models/eft/hideout/IHideoutArea';
+import type { ITrader } from '@spt-aki/models/eft/common/tables/ITrader';
+import type { IInventoryConfig } from '@spt-aki/models/spt/config/IInventoryConfig';
+import type { IInRaidConfig } from '@spt-aki/models/spt/config/IInRaidConfig';
+import type { IQuestConfig } from '@spt-aki/models/spt/config/IQuestConfig';
 
 const packageConfig = require('../package.json');
 const IS_DEBUG_MODE = false;
@@ -253,6 +254,7 @@ class Mod implements IMod {
 
       this.modifyRagfairConfig();
       this.modifyConfigAsTKFSuperMod();
+      this.modifyQuestConfigs();
     } catch (error) {
       this.logger.error(error.message);
       this.logger.error(error.stack);
@@ -375,6 +377,22 @@ class Mod implements IMod {
       Enums.ConfigTypes.IN_RAID as unknown as ConfigTypes
     );
     inRaidConfig.MIAOnRaidEnd = false;
+  }
+
+  /**
+   * 增加周常和日常任务的数量
+   */
+  private modifyQuestConfigs(): void {
+    const questsConfig = this.configServer.getConfig<IQuestConfig>(
+      Enums.ConfigTypes.QUEST as unknown as ConfigTypes
+    );
+    questsConfig.repeatableQuests.forEach(quest => {
+      if (quest.name === 'Daily') {
+        quest.numQuests = 5; 
+      } else if (quest.name === 'Weekly') {
+        quest.numQuests = 2;
+      }
+    });
   }
 
   /**
