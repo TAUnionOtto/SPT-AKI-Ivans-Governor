@@ -18,7 +18,11 @@ import type { IHideoutArea } from '@spt-aki/models/eft/hideout/IHideoutArea';
 import type { ITrader } from '@spt-aki/models/eft/common/tables/ITrader';
 import type { IInventoryConfig } from '@spt-aki/models/spt/config/IInventoryConfig';
 import type { IInRaidConfig } from '@spt-aki/models/spt/config/IInRaidConfig';
-import type { IQuestConfig } from '@spt-aki/models/spt/config/IQuestConfig';
+import type {
+  IQuestConfig,
+  IRepeatableQuestConfig,
+  IRewardScaling as IRepeatableRewardScaling,
+} from '@spt-aki/models/spt/config/IQuestConfig';
 
 const packageConfig = require('../package.json');
 const IS_DEBUG_MODE = false;
@@ -352,13 +356,13 @@ class Mod implements IMod {
     /**
      * 超级模组的动态市场和在线市场实际上是启用了 regFairConfig.dynamic 的 enabled、liveprices
      * @see tkf-SuperMod/extend/Ragfair/Ragfair.js#L24
-     * 
+     *
      * enabled、liveprices 这两个属性在 d.ts 中本不存在，看起来是已被弃用
      * 试验得出结论：
-     * 
+     *
      * - enabled 选项没有任何作用，应该是已经被默认开启，既默认模式就是动态市场
      * - liveprices 会生成数量为 99999999 的一笔订单，价格没有找到规律，应该是还在开发中
-     * 
+     *
      * 遂在 randomUpdateRegFairPrices 方法中做动态调整，模拟每日价格波动
      */
   }
@@ -380,19 +384,74 @@ class Mod implements IMod {
   }
 
   /**
-   * 增加周常和日常任务的数量
+   * 增加周常和日常任务的数量，调整任务的内容
    */
   private modifyQuestConfigs(): void {
     const questsConfig = this.configServer.getConfig<IQuestConfig>(
       Enums.ConfigTypes.QUEST as unknown as ConfigTypes
     );
-    questsConfig.repeatableQuests.forEach(quest => {
-      if (quest.name === 'Daily') {
-        quest.numQuests = 5; 
-      } else if (quest.name === 'Weekly') {
-        quest.numQuests = 2;
-      }
-    });
+    const dailyQuestsConfig = questsConfig.repeatableQuests.find(config => config.name === 'Daily');
+    dailyQuestsConfig.numQuests = 5;  // 调整每次刷新任务数
+    dailyQuestsConfig.resetTime = 60 * 60 * 12;  // 调整任务刷新周期
+    const { Exploration: dailyExploration, Elimination: dailyElimination } = dailyQuestsConfig.questConfig;
+    dailyExploration.maxExtracts = 1; // 调整撤离任务的次数要求上限
+    dailyElimination.targets = dailyElimination.targets.filter(target => !target.data.isBoss); // 禁用击杀 boss 的任务
+    dailyElimination.bodyPartProb = 0; // 禁用命中部位任务
+    dailyElimination.distProb = 0; // 禁用击杀距离任务
+    dailyElimination.maxKills = 12;
+    dailyElimination.minKills = 5;  // 调整击杀任务的数量要求
+
+    const weeklyQuestsConfig = questsConfig.repeatableQuests.find(config => config.name === 'Weekly');
+    weeklyQuestsConfig.numQuests = 2;
+    // weeklyQuestsConfig.resetTime = 60 * 60 * 24 * 1; // 调整任务刷新周期
+    weeklyQuestsConfig.minPlayerLevel = 5; // 调整人物等级
+    const { rewardScaling: weeklyRewardScaling } = weeklyQuestsConfig;
+    weeklyRewardScaling.roubles = weeklyRewardScaling.roubles.map(roubles => roubles * 3); // 调整卢布奖励
+    weeklyRewardScaling.items = [3, 4, 5, 5]; // 调整物品奖励数量
+    const {
+      Exploration: weeklyExploration,
+      Completion: weeklyCompletion,
+      Elimination: weeklyElimination,
+    } = weeklyQuestsConfig.questConfig;
+    weeklyExploration.maxExtracts = 4; // 调整撤离任务的次数要求上限
+    weeklyCompletion.minRequestedAmount = 5; // 调整上交物品的数量下限
+    weeklyCompletion.minRequestedBulletAmount = 60;
+    weeklyCompletion.maxRequestedBulletAmount = 120;  // 调整上交子弹的数量
+    const bossTargets = weeklyElimination.targets.filter(target => !!target.data.isBoss);
+    weeklyElimination.targets = weeklyElimination.targets.filter(target => !target.data.isBoss); // 禁用击杀 boss 的任务
+    weeklyElimination.bodyPartProb = 0; // 禁用命中部位任务
+    weeklyElimination.distProb = 0; // 禁用击杀距离任务
+    weeklyElimination.maxKills = 30;
+    weeklyElimination.minKills = 15;  // 调整击杀任务的数量要求
+
+    // 新增击杀 boss 周常任务，提高其收益
+    const weeklyKillingBossRewardScaling = {
+      levels: weeklyRewardScaling.levels,
+      experience: weeklyRewardScaling.experience.map(experience => experience * 2.5),
+      roubles: weeklyRewardScaling.roubles.map(roubles => roubles * 2.5),
+      items: [2, 4, 6, 6],
+      reputation: weeklyRewardScaling.reputation,
+      rewardSpread: weeklyRewardScaling.rewardSpread,
+    } as IRepeatableRewardScaling;
+    const weeklyKillingBossQuestConfig = {
+      ...weeklyQuestsConfig,
+      name: 'BossWeekly',
+      types: ['Elimination'],
+      numQuests: 1,
+      rewardScaling: weeklyKillingBossRewardScaling,
+      questConfig: {
+        Elimination: {
+          ... weeklyElimination,
+          targets: bossTargets.map(target => ({ ...target, relativeProbability: 1 })),
+          bodyPartProb: 0,
+          specificLocationProb: 0,
+          distProb: 0,
+          maxKills: 4,
+          minKills: 3,
+        },
+      },
+    } as IRepeatableQuestConfig;
+    questsConfig.repeatableQuests.push(weeklyKillingBossQuestConfig);
   }
 
   /**
@@ -434,10 +493,10 @@ class Mod implements IMod {
 
   /**
    * 将跳蚤市场的物品价格随机化
-   * 
+   *
    * 下界为 0.45 倍，上届为 3.15 倍，做约以 1 为中轴的正则随机
-   * 
-   * @param priceTemplates 
+   *
+   * @param priceTemplates
    */
   private randomUpdateRegFairPrices(priceTemplates: Record<string, number>): void {
     const randomLowerBound = 0.45;
@@ -445,7 +504,7 @@ class Mod implements IMod {
     const ndRandomSkew = 1.95;
     for (const templateId in priceTemplates) {
       if (!Object.prototype.hasOwnProperty.call(priceTemplates, templateId)) {
-        continue;        
+        continue;
       }
       priceTemplates[templateId] = Math.floor(priceTemplates[templateId] * this.ndRandom(
         randomLowerBound,
@@ -457,10 +516,10 @@ class Mod implements IMod {
 
   /**
    * 获得正态分布随机出的一个值
-   * 
+   *
    * @see https://stackoverflow.com/a/49434653
-   * 
-   * @param min 最小值 
+   *
+   * @param min 最小值
    * @param max 最大值
    * @param skew 偏斜率
    * @returns 随机结果
