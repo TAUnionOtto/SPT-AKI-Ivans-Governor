@@ -283,9 +283,10 @@ class Mod implements IMod {
 
       // TODO: 目前修改价格不能正常作用于跳蚤市场的售价
       //       需要等 SPT-AKI 升级到 ^3.0.1，并使用 loadAfterDbInit() hook 来修改
+      //       强行修改 templates.prices 会导致跳蚤市场价格出现异常
       this.modifyImbaEquipments(dataBaseTables.templates.items, dataBaseTables.templates.prices, dataBaseTables.bots.types);
       this.expandCollections(dataBaseTables.templates.items);
-      this.randomUpdateRegFairPrices(dataBaseTables.templates.prices);
+      // this.randomUpdateRegFairPrices(dataBaseTables.templates.prices);
 
       this.increaseBotCount(dataBaseTables.locations);
       this.increaseTraderLoyaltyStandingRequires(dataBaseTables.traders);
@@ -392,7 +393,7 @@ class Mod implements IMod {
     );
     const dailyQuestsConfig = questsConfig.repeatableQuests.find(config => config.name === 'Daily');
     dailyQuestsConfig.numQuests = 5;  // 调整每次刷新任务数
-    dailyQuestsConfig.resetTime = 60 * 60 * 12;  // 调整任务刷新周期
+    dailyQuestsConfig.resetTime = 60 * 60 * 8;  // 调整任务刷新周期
     const { Exploration: dailyExploration, Elimination: dailyElimination } = dailyQuestsConfig.questConfig;
     dailyExploration.maxExtracts = 1; // 调整撤离任务的次数要求上限
     dailyElimination.targets = dailyElimination.targets.filter(target => !target.data.isBoss); // 禁用击杀 boss 的任务
@@ -425,6 +426,7 @@ class Mod implements IMod {
     weeklyElimination.minKills = 15;  // 调整击杀任务的数量要求
 
     // 新增击杀 boss 周常任务，提高其收益
+    // TODO: 使用 Trap-CustomQuests 代替
     const weeklyKillingBossRewardScaling = {
       levels: weeklyRewardScaling.levels,
       experience: weeklyRewardScaling.experience.map(experience => experience * 2.5),
@@ -451,7 +453,7 @@ class Mod implements IMod {
         },
       },
     } as IRepeatableQuestConfig;
-    questsConfig.repeatableQuests.push(weeklyKillingBossQuestConfig);
+    // questsConfig.repeatableQuests.push(weeklyKillingBossQuestConfig);
   }
 
   /**
@@ -464,19 +466,19 @@ class Mod implements IMod {
   }
 
   /**
-   * 调整跳蚤市场设置，关闭向市场销售的功能，并将访问市场的最低等级调到 1
+   * 调整跳蚤市场设置，限制向市场销售的功能，并将访问市场的最低等级调到 1
    *
    * @param globalConfigs
    */
   private modifyRagFairConfig(globalConfigs: GlobalConfig): void {
     // 将使用跳蚤市场的最低等级调整为 1
     globalConfigs.RagFair.minUserLevel = 1;
-    // 关闭跳蚤市场出售订单
-    globalConfigs.RagFair.maxActiveOfferCount = [{ from: -10000, to: 10000, count: 0 }];
+    // 限制跳蚤市场出售订单
+    globalConfigs.RagFair.maxActiveOfferCount = [{ from: -10000, to: 10000, count: 2 }];
     // 提高市场税率
-    // globalConfigs.RagFair.communityTax = 8;
-    // globalConfigs.RagFair.communityItemTax = 12;
-    // globalConfigs.RagFair.communityRequirementTax = 24;
+    globalConfigs.RagFair.communityTax = 16;
+    globalConfigs.RagFair.communityItemTax = 20;
+    globalConfigs.RagFair.communityRequirementTax = 28;
   }
 
   private modifyStaminaConfig(globalConfigs: GlobalConfig): void {
@@ -494,7 +496,7 @@ class Mod implements IMod {
   /**
    * 将跳蚤市场的物品价格随机化
    *
-   * 下界为 0.45 倍，上届为 3.15 倍，做约以 1 为中轴的正则随机
+   * 下界为 0.45 倍，上界为 3.15 倍，做约以 1 为中轴的正则随机
    *
    * @param priceTemplates
    */
@@ -633,7 +635,7 @@ class Mod implements IMod {
       CheckOverride: 5,
       MalfunctionChance: 0.07,
     } as ITemplateItemProps;
-    const priceIncreaseRatio = 12.5;
+    const priceIncreaseRatio = 3.5;
     imbaDrumMagazineIds.forEach(id => {
       const drumMagazine = itemTemplates[id];
       if (!drumMagazine) {
@@ -641,7 +643,7 @@ class Mod implements IMod {
         return;
       }
       this.modifyItemTemplateAs(drumMagazine, modification);
-      priceTemplates[id] = priceTemplates[id] * priceIncreaseRatio;
+      // priceTemplates[id] = priceTemplates[id] * priceIncreaseRatio;
     });
   }
 
@@ -661,7 +663,7 @@ class Mod implements IMod {
   }
 
   /**
-   * 扩展玩家的口袋大小，从 4*1*1 升级为 1*7*5
+   * 扩展玩家的口袋大小，从 4*1*1 升级为 1*8*6
    * @param itemTemplates
    */
   private expandPockets(itemTemplates: Record<string, ITemplateItem>): void {
@@ -672,8 +674,8 @@ class Mod implements IMod {
       return;
     }
     const pocketFirstGrid = pockets._props.Grids[0];
-    pocketFirstGrid._props.cellsH = 7;
-    pocketFirstGrid._props.cellsV = 5;
+    pocketFirstGrid._props.cellsH = 8;
+    pocketFirstGrid._props.cellsV = 6;
     pockets._props.Grids = [pocketFirstGrid];
   }
 
@@ -705,7 +707,7 @@ class Mod implements IMod {
       if (equipment.needRemoveAllExcludedFilter) {
         this.removeAllExcludedFilter(itemTemplate);
       }
-      priceTemplates[equipment.id] = priceTemplates[equipment.id] * (equipment.riceIncreaseRatio || priceIncreaseRatio);
+      // priceTemplates[equipment.id] = priceTemplates[equipment.id] * (equipment.riceIncreaseRatio || priceIncreaseRatio);
       this.decreaseEquipProbabilityInAllBotInventory(equipment.id, botTypeTemplates);
     });
   }
@@ -960,7 +962,7 @@ class Mod implements IMod {
       const trader = traders[traderId];
       trader.base.loyaltyLevels.forEach(levelConfig => {
         const minLevel = parseInt(levelConfig.minLevel as unknown as string, 10);
-        levelConfig.minLevel = minLevel === 1 ? 1 : minLevel * 2;
+        levelConfig.minLevel = minLevel === 1 ? 1 : Math.floor(minLevel * 1.35);
 
         levelConfig.minSalesSum = levelConfig.minSalesSum * 2;
         levelConfig.minStanding = levelConfig.minStanding * 2;
@@ -994,7 +996,7 @@ class Mod implements IMod {
               requirement.count = requirement.count * 3;
             }
           } else if (requirement.type === 'Skill') {
-            requirement.count = requirement.skillLevel + 4;
+            requirement.skillLevel = requirement.skillLevel + 4;
           }
         });
       }
