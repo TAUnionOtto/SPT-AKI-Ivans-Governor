@@ -1,7 +1,7 @@
 {
   "name": "IvansGovernor",
   "version": "1.0.0",
-  "main": "src/mod.js",
+  "main": "src/index.js",
   "license": "MIT",
   "author": "Ivan",
   "akiVersion": "3.0.0",
@@ -9,9 +9,7 @@
     "setup:environment": "yarn install",
     "build:tsmod": "yarn clean:usermod && yarn copyTo:tsmod",
     "copyTo:tsmod": "cp -r ./src ../../user/mods/z999-Ivans-Governor/src && cp ./package.json ../../user/mods/z999-Ivans-Governor/package.json",
-
     "clean:usermod": "(cd ../../user/mods/ && rm -rf z999-Ivans-Governor && mkdir z999-Ivans-Governor)",
-
     "build:unzipped": "copyfiles -e \"./node_modules/**/*.*\" -e \"./dist/**/*.*\" -e \"./package-lock.json\" -e \"./tsconfig.json\" -e \"./README.txt\" -e \"./mod.code-workspace\" \"./**/*.*\" ./dist",
     "zip:files": "cd dist/ && bestzip ../mod.zip *",
     "build:zip": "npm run clean:environment && npm run build:unzipped && npm run zip:files",
@@ -25,6 +23,7 @@
     "copyfiles": "2.4.1",
     "eslint": "7.26.0",
     "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.26.0",
     "tsyringe": "4.6.0",
     "typescript": "4.6.4"
   }
