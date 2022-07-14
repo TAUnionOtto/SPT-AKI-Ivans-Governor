@@ -6,6 +6,7 @@ import type { ILogger } from '@spt-aki/models/spt/utils/ILogger';
 import BaseMod from './BaseMod';
 import type BaseSubMod from './subMods/BaseSubMod';
 import Governor from './subMods/Governor';
+import BlackMarketTrader from './subMods/BlackMarketTrader';
 
 class ModEntry extends BaseMod {
   private subMods: Array<BaseSubMod> = [];
@@ -13,6 +14,7 @@ class ModEntry extends BaseMod {
   constructor() {
     super();
     this.subMods.push(new Governor());
+    this.subMods.push(new BlackMarketTrader());
   }
 
   public load(container: DependencyContainer): void {

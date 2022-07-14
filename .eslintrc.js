@@ -60,6 +60,7 @@ module.exports = {
       consistent: true,
       multiline: true,
     }],
+    'prefer-const': 'warn',
     'prefer-destructuring': ['warn', {
       AssignmentExpression: {
         array: false,

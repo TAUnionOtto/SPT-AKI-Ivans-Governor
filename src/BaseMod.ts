@@ -1,4 +1,3 @@
-import { env } from 'process';
 import { DependencyContainer } from 'tsyringe';
 
 import type { IMod } from '@spt-aki/models/external/mod';
@@ -7,7 +6,7 @@ import type { ILogger } from '@spt-aki/models/spt/utils/ILogger';
 const packageConfig = require('../package.json');
 
 export default abstract class BaseMod implements IMod {
-  static IS_DEBUG_MODE = env.IS_DEBUG_MODE;
+  static IS_DEBUG_MODE = false;
   static PACKAGE_CONFIG = packageConfig;
 
   protected logger: ILogger;
@@ -30,5 +29,15 @@ export default abstract class BaseMod implements IMod {
       return;
     }
     this.logger.log(`[DEBUG][${packageConfig.name}-${packageConfig.version}-${this.constructor.name}] ${message}`, 'bgGray');
+  }
+
+  debugRecord(record: Record<string, unknown>) {
+    if (!BaseMod.IS_DEBUG_MODE) {
+      return;
+    }
+    this.logger.log({
+      _subMod: this.constructor.name,
+      ...record,
+    }, 'bgGray');
   }
 }

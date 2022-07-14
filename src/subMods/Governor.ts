@@ -1,4 +1,6 @@
 /* eslint-disable max-lines */
+import { DependencyContainer } from 'tsyringe';
+
 import type { ConfigTypes } from '@spt-aki/models/enums/ConfigTypes';
 import type { ILocations } from '@spt-aki/models/spt/server/ILocations';
 import type { IRagfairConfig } from '@spt-aki/models/spt/config/IRagfairConfig';
@@ -235,7 +237,7 @@ const collectionsToExpand = [{
 }];
 
 export default class Governor extends BaseSubMod {
-  customLoad(): void {
+  customLoad(container: DependencyContainer): void {
     this.modifyRagfairConfig();
     this.modifyConfigAsTKFSuperMod();
     this.modifyQuestConfigs();
@@ -244,7 +246,7 @@ export default class Governor extends BaseSubMod {
   customDelayedLoad(): void {
     const dataBaseTables = this.databaseServer.getTables();
     const globalConfigs = dataBaseTables.globals.config;
-    this.modifyRagFairConfig(globalConfigs);
+    this.modifyRagfairGlobalConfig(globalConfigs);
     this.modifyStaminaConfig(globalConfigs);
     this.modifyDBAsTKFSuperMod(globalConfigs);
 
@@ -256,7 +258,7 @@ export default class Governor extends BaseSubMod {
     this.expandPockets(dataBaseTables.templates.items);
 
     // TODO: 目前修改价格不能正常作用于跳蚤市场的售价
-    //       需要等 SPT-AKI 升级到 ^3.0.1，并使用 loadAfterDbInit() hook 来修改
+    //       需要等 SPT-AKI 升级到 ^3.1.0，并使用 loadAfterDbInit() hook 来修改
     //       强行修改 templates.prices 会导致跳蚤市场价格出现异常
     this.modifyImbaEquipments(
       dataBaseTables.templates.items,
@@ -289,17 +291,6 @@ export default class Governor extends BaseSubMod {
       currentItem._props.CanSellOnRagfair = true;
       currentItem._props.CanRequireOnRagfair = true;
     }
-  }
-
-  /**
-     * 禁止将某物品出售给跳蚤市场
-     *
-     * 由 modifyRagFairConfig 代替，直接关闭向跳蚤市场出售的功能
-     *
-     * @param itemTemplate
-     */
-  private blockToSellToRegFair(itemTemplate: ITemplateItem): void {
-    itemTemplate._props.CanRequireOnRagfair = false;
   }
 
   /**
@@ -433,7 +424,7 @@ export default class Governor extends BaseSubMod {
      *
      * @param globalConfigs
      */
-  private modifyRagFairConfig(globalConfigs: GlobalConfig): void {
+  private modifyRagfairGlobalConfig(globalConfigs: GlobalConfig): void {
     // 将使用跳蚤市场的最低等级调整为 1
     globalConfigs.RagFair.minUserLevel = 1;
     // 限制跳蚤市场出售订单
