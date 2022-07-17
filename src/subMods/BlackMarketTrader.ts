@@ -200,9 +200,13 @@ export default class BlackMarketTrader extends BaseMod {
       byItemSize: this.roundFloat(-this.getStandingDecreaseOfSize(itemSizeSum)),
       byDogTag: this.roundFloat(dogTagsIncrease),
     };
+    const consumed = stats.byBasePreSession + stats.byItemType + stats.byItemSize;
+    const produced = stats.byDogTag;
     return {
       ...stats,
-      sum: this.roundFloat(stats.byBasePreSession + stats.byItemType + stats.byItemSize + stats.byDogTag),
+      consumed,
+      produced,
+      sum: this.roundFloat(consumed + produced),
     };
   }
 
@@ -285,8 +289,9 @@ export default class BlackMarketTrader extends BaseMod {
     responseMoney: IItem,
   ): string {
     const messages = [];
-    if (responseMoney.upd.StackObjectsCount > 0) {
-      messages.push(`本次交易共计售出商品 ${sellingItems.length} 件，总计 ${responseMoney.upd.StackObjectsCount} 卢布；`);
+    const moneyReturns = responseMoney.upd.StackObjectsCount;
+    if (moneyReturns > 0) {
+      messages.push(`本次交易共计售出商品 ${sellingItems.length} 件，总计 ${moneyReturns} 卢布；`);
       messages.push(`交易税率 ${this.sellingTax * 100}%；`);
     }
     if (standingDiffStats.sum >= 0) {
@@ -305,6 +310,9 @@ export default class BlackMarketTrader extends BaseMod {
     }
     if (standingDiffStats.byDogTag) {
       messages.push(`狗牌上缴获得：${standingDiffStats.byDogTag}；`);
+    }
+    if (standingDiffStats.consumed > 0 && moneyReturns > 0) {
+      messages.push(`平均千分之信用点回报：${this.roundFloat(moneyReturns / 1000 / standingDiffStats.consumed)}；`);
     }
     return messages.join('');
   }
@@ -404,5 +412,7 @@ interface StandingDiffStats {
   byItemType: number;
   byItemSize: number;
   byDogTag: number;
+  consumed: number;
+  produced: number;
   sum: number;
 }

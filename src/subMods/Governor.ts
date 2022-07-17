@@ -273,6 +273,7 @@ export default class Governor extends BaseSubMod {
     this.increaseHideoutAreaRequirements(dataBaseTables.hideout.areas);
 
     this.decreaseAdiKitUseTime(dataBaseTables.templates.items);
+    this.increaseExpensiveItemsSpawnChance(dataBaseTables.templates.items);
 
     // this.testItemsPrice(dataBaseTables.templates.prices);
   }
@@ -407,7 +408,7 @@ export default class Governor extends BaseSubMod {
         },
       },
     } as IRepeatableQuestConfig;
-      // questsConfig.repeatableQuests.push(weeklyKillingBossQuestConfig);
+    // questsConfig.repeatableQuests.push(weeklyKillingBossQuestConfig);
   }
 
   /**
@@ -895,7 +896,7 @@ export default class Governor extends BaseSubMod {
   /**
      * 降低一半任务完成后的商人信任度回报
      *
-     * 以由 increaseTraderLoyaltyStandingRequires 代替
+     * 已经用 increaseTraderLoyaltyStandingRequires 代替
      *
      * @param quests
      */
@@ -991,5 +992,23 @@ export default class Governor extends BaseSubMod {
     imbaEquipments.forEach((equipment) => {
       this.logInfo(`[TEST] Equipment price ${equipment.id} -> ${priceTemplates[equipment.id]}`);
     });
+  }
+
+  /**
+   * 提升稀有物品的刷新几率，将权重提高到原本的五倍，上限为 5
+   */
+  private increaseExpensiveItemsSpawnChance(itemTemplates: Record<string, ITemplateItem>): void {
+    for (const id in itemTemplates) {
+      if (!Object.prototype.hasOwnProperty.call(itemTemplates, id)) {
+        continue;
+      }
+      const itemTemplate = itemTemplates[id];
+      const spawnChance = itemTemplate._props.SpawnChance;
+      const increaseLimit = 5;
+      if (!spawnChance || spawnChance <= 0 || spawnChance >= increaseLimit) {
+        continue;
+      }
+      itemTemplate._props.SpawnChance = Math.max(spawnChance * 5, increaseLimit);
+    }
   }
 }
