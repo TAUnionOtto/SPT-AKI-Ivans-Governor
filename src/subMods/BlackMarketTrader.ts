@@ -311,8 +311,8 @@ export default class BlackMarketTrader extends BaseMod {
     if (standingDiffStats.byDogTag) {
       messages.push(`狗牌上缴获得：${standingDiffStats.byDogTag}；`);
     }
-    if (standingDiffStats.consumed > 0 && moneyReturns > 0) {
-      messages.push(`平均千分之信用点回报：${this.roundFloat(moneyReturns / 1000 / standingDiffStats.consumed)}；`);
+    if (standingDiffStats.consumed < 0 && moneyReturns > 0) {
+      messages.push(`平均千分之信用点回报：${this.roundFloat(moneyReturns / 1000 / (-standingDiffStats.consumed))}；`);
     }
     return messages.join('');
   }
